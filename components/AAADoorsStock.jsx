@@ -15,9 +15,9 @@ import { buildStock, availableAt, lineTotal, movementValue, movementQty } from "
 
 /* ---------------------------------------------------------------- brand mark */
 function Logo({ h = 30, mono = false }) {
-  const green = mono ? "#FFFFFF" : "#293F2D";
+  const green = mono ? "#FFFFFF" : "#AF3034";
   const red = mono ? "#FFFFFF" : "#AF3034";
-  const bar = mono ? "rgba(255,255,255,.16)" : "#293F2D";
+  const bar = mono ? "rgba(255,255,255,.16)" : "#AF3034";
   const barText = "#FFFFFF";
   return (
     <svg viewBox="0 0 300 152" height={h} role="img" aria-label="AAA Doors" style={{ display: "block" }}>
@@ -165,7 +165,7 @@ function FlowChart({ data, cur }) {
     <div>
       <svg viewBox="0 0 100 42" preserveAspectRatio="none" style={{ width: "100%", height: 150, display: "block", overflow: "visible" }} role="img" aria-label="Stock in and out over the last 14 days">
         {[0, 1, 2].map((g) => (
-          <line key={g} x1="0" x2="100" y1={2 + g * 12} y2={2 + g * 12} stroke="#DDE1D8" strokeWidth=".3" vectorEffect="non-scaling-stroke" />
+          <line key={g} x1="0" x2="100" y1={2 + g * 12} y2={2 + g * 12} stroke="#E8E8E8" strokeWidth=".3" vectorEffect="non-scaling-stroke" />
         ))}
         {data.map((d, i) => {
           const bw = W * 0.32;
@@ -174,12 +174,12 @@ function FlowChart({ data, cur }) {
           const hOut = (d.outQty / max) * 36;
           return (
             <g key={i}>
-              <rect x={x} y={38 - hIn} width={bw} height={Math.max(hIn, d.inQty ? 0.6 : 0)} fill="#293F2D" rx=".4" />
+              <rect x={x} y={38 - hIn} width={bw} height={Math.max(hIn, d.inQty ? 0.6 : 0)} fill="#8C2528" rx=".4" />
               <rect x={x + bw + W * 0.05} y={38 - hOut} width={bw} height={Math.max(hOut, d.outQty ? 0.6 : 0)} fill="#AF3034" rx=".4" />
             </g>
           );
         })}
-        <line x1="0" x2="100" y1="38" y2="38" stroke="#C6CDC0" strokeWidth=".5" vectorEffect="non-scaling-stroke" />
+        <line x1="0" x2="100" y1="38" y2="38" stroke="#D4D4D4" strokeWidth=".5" vectorEffect="non-scaling-stroke" />
       </svg>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
         {data.map((d, i) => (
