@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { store, K_DB, K_MOV, K_PHOTO } from "@/lib/store";
+import { store, K_DB, K_MOV, K_PHOTO, K_TICKETS, K_TICKET_MEDIA } from "@/lib/store";
 import {
   uid, pad, todayISO, YY, fmtNum, fmtMoney, fmtMoneyShort, fmtDate, fmtDateTime,
-  relTime, initials, daysAgoISO, compressImage, downloadCSV,
+  relTime, initials, daysAgoISO, compressImage, readMediaFile, downloadCSV,
 } from "@/lib/helpers";
 import {
   CATS, catLabel, UNITS, MOVE, PERMS, ROLES, presetPerms, can, visibleFacilities,
@@ -15,20 +15,21 @@ import { buildStock, availableAt, lineTotal, movementValue, movementQty } from "
 
 /* ---------------------------------------------------------------- brand mark */
 function Logo({ h = 30, mono = false }) {
-  const green = mono ? "#FFFFFF" : "#AF3034";
-  const red = mono ? "#FFFFFF" : "#AF3034";
-  const bar = mono ? "rgba(255,255,255,.16)" : "#AF3034";
-  const barText = "#FFFFFF";
   return (
-    <svg viewBox="0 0 300 152" height={h} role="img" aria-label="AAA Doors" style={{ display: "block" }}>
-      <path d="M3 22 L34 8 L34 144 L3 130 Z" fill={green} />
-      <rect x="38" y="10" width="9" height="134" fill={green} />
-      <path d="M47 10 H76 V96 H67 V19 H47 Z" fill={green} />
-      <text x="88" y="86" fontFamily="'Playfair Display', Georgia, serif" fontWeight="700" fontSize="90" fill={red} letterSpacing="-1">AAA</text>
-      <rect x="52" y="97" width="248" height="33" fill={bar} />
-      <text x="178" y="121" textAnchor="middle" fontFamily="'Archivo', sans-serif" fontWeight="600" fontSize="22" fill={barText} letterSpacing="7.5">DOORS</text>
-      <text x="88" y="148" fontFamily="'Archivo', sans-serif" fontWeight="600" fontSize="13.5" fill={green} letterSpacing="3.2">AAADOORS.COM</text>
-    </svg>
+    <img
+      src="/logo.png"
+      alt="AAA Doors LTD"
+      height={h}
+      style={{
+        display: "block",
+        height: h,
+        width: "auto",
+        maxWidth: "100%",
+        ...(mono
+          ? { background: "#fff", borderRadius: 8, padding: "6px 10px", boxSizing: "content-box" }
+          : null),
+      }}
+    />
   );
 }
 
@@ -59,6 +60,8 @@ const I = {
   arrow: "M5 12h14M13 6l6 6-6 6",
   clock: "M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2",
   eye: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7zM12 15a3 3 0 100-6 3 3 0 000 6z",
+  ticket: "M3 9a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 00-2 2 2 2 0 002 2v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1a2 2 0 002-2 2 2 0 00-2-2V9zM9 7v10",
+  clip: "M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48",
 };
 function Ic({ d, s = 18, w = 1.9, cls = "ic" }) {
   return (
@@ -271,6 +274,71 @@ function Lightbox({ src, onClose }) {
   return (
     <div className="ovl no-print" style={{ alignItems: "center", zIndex: 300 }} onMouseDown={onClose}>
       <img src={src} alt="Loading photo" style={{ maxWidth: "100%", maxHeight: "86vh", borderRadius: 12, boxShadow: "var(--shadow-l)" }} />
+    </div>
+  );
+}
+
+function MediaAttach({ files, setFiles, max = 4, onError }) {
+  const camRef = useRef(null);
+  const fileRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const handle = async (e) => {
+    const pickedFiles = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!pickedFiles.length) return;
+    setBusy(true);
+    try {
+      const room = max - files.length;
+      const picked = pickedFiles.slice(0, Math.max(0, room));
+      const outs = [];
+      for (const f of picked) {
+        try {
+          outs.push(await readMediaFile(f));
+        } catch (err) {
+          const msg = err && err.message === "size"
+            ? "Videos must be under 8 MB. Try a shorter clip."
+            : "Could not read that file. Use a photo or a short video.";
+          onError && onError(msg);
+        }
+      }
+      if (outs.length) setFiles([...files, ...outs]);
+      if (pickedFiles.length > room) onError && onError("Only " + max + " attachments per ticket. Extras were skipped.");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div>
+      <input ref={camRef} type="file" accept="image/*,video/*" capture="environment" multiple onChange={handle} className="sr" tabIndex={-1} />
+      <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={handle} className="sr" tabIndex={-1} />
+      <div className="row wrap-r" style={{ marginBottom: files.length ? 11 : 0 }}>
+        <button type="button" className="btn line sm" disabled={busy || files.length >= max} onClick={() => camRef.current && camRef.current.click()}>
+          <Ic d={I.cam} s={15} /> {busy ? "Working…" : "Camera"}
+        </button>
+        <button type="button" className="btn ghost sm" disabled={busy || files.length >= max} onClick={() => fileRef.current && fileRef.current.click()}>
+          <Ic d={I.clip} s={15} /> Photo or video
+        </button>
+        <span className="hint">{files.length}/{max}</span>
+      </div>
+      {files.length > 0 && (
+        <div className="photo-strip">
+          {files.map((p, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              {p.kind === "video"
+                ? <video src={p.data} muted playsInline controls={false} />
+                : <img src={p.data} alt={"Attachment " + (i + 1)} />}
+              <button type="button" className="x" onClick={() => setFiles(files.filter((_, j) => j !== i))}
+                style={{ position: "absolute", top: 5, right: 5, background: "rgba(255,255,255,.94)", boxShadow: "var(--shadow-s)" }}
+                aria-label={"Remove attachment " + (i + 1)}>
+                <Ic d={I.x} s={14} />
+              </button>
+              {p.kind === "video" && (
+                <span className="chip" style={{ position: "absolute", left: 6, bottom: 6, background: "rgba(0,0,0,.7)", color: "#fff", border: 0 }}>Video</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1779,10 +1847,137 @@ function Settings({ db, movements, user, onSaveCompany, onReset, onSeed, toast, 
   );
 }
 
+/* ---------------------------------------------------------------- raise a ticket */
+function RaiseTicket({ tickets, user, onSubmit, toast }) {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [kind, setKind] = useState("issue");
+  const [files, setFiles] = useState([]);
+  const [err, setErr] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const mine = tickets.filter((t) => t.userId === user.id);
+
+  const submit = async () => {
+    const e = {};
+    if (!subject.trim()) e.subject = "Give the ticket a short title.";
+    if (!body.trim() || body.trim().length < 8) e.body = "Describe the query or issue in a bit more detail.";
+    setErr(e);
+    if (Object.keys(e).length) return;
+    setSaving(true);
+    try {
+      const ok = await onSubmit({
+        subject: subject.trim(),
+        body: body.trim(),
+        kind,
+        attachments: files,
+      });
+      if (ok) {
+        setSubject("");
+        setBody("");
+        setKind("issue");
+        setFiles([]);
+        setErr({});
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid" style={{ gap: 16 }}>
+      <div className="notice">
+        <span className="ni"><Ic d={I.chk} s={18} /></span>
+        <p><strong>Your issues or tickets will be resolved shortly.</strong> Raise a query or report a problem, attach a photo or short video if it helps, and the team will follow up.</p>
+      </div>
+
+      <div className="card">
+        <div className="card-h"><h3 className="h-sec">New ticket</h3></div>
+        <div className="card-b grid" style={{ gap: 16 }}>
+          <div className="fgrid two">
+            <Field label="Type">
+              <select className="sel" value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="issue">Issue</option>
+                <option value="query">Query</option>
+              </select>
+            </Field>
+            <Field label="Subject" req error={err.subject}>
+              <input className={"inp" + (err.subject ? " err" : "")} value={subject}
+                onChange={(e) => setSubject(e.target.value)} placeholder="Short summary of the problem"
+                maxLength={120} autoFocus />
+            </Field>
+          </div>
+          <Field label="Describe your query or issue" req error={err.body} hint="What happened, where, and what you need">
+            <textarea className={"ta" + (err.body ? " err" : "")} value={body} rows={5}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Write the details here…" />
+          </Field>
+          <div>
+            <label style={{ fontFamily: "var(--fd)", textTransform: "uppercase", letterSpacing: ".11em", fontSize: 11, fontWeight: 600, color: "var(--muted)", display: "block", marginBottom: 6 }}>
+              Attach photos or video
+            </label>
+            <MediaAttach files={files} setFiles={setFiles} onError={(m) => toast(m, true)} />
+            <div className="hint" style={{ marginTop: 6 }}>Up to 4 files. Videos under 8 MB work best.</div>
+          </div>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button className="btn" disabled={saving} onClick={submit}>
+              <Ic d={I.ticket} s={15} /> {saving ? "Sending…" : "Submit ticket"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-h">
+          <h3 className="h-sec">Your tickets</h3>
+          <div className="spacer" />
+          <span className="tiny dim">{mine.length} raised</span>
+        </div>
+        {mine.length === 0 ? (
+          <Empty icon={I.ticket} title="No tickets yet"
+            body="When you submit a query or issue it will show up here until it is resolved." />
+        ) : (
+          <div className="tw">
+            <table className="t">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Type</th>
+                  <th>Subject</th>
+                  <th>Status</th>
+                  <th>Attachments</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mine.map((t) => (
+                  <tr key={t.id}>
+                    <td>
+                      <div className="cellname">{relTime(t.createdAt)}</div>
+                      <div className="cellsub">{fmtDateTime(t.createdAt)}</div>
+                    </td>
+                    <td><Chip type={t.kind === "query" ? "trf" : "out"}>{t.kind === "query" ? "Query" : "Issue"}</Chip></td>
+                    <td>
+                      <div className="cellname">{t.subject}</div>
+                      <div className="cellsub" style={{ maxWidth: 360, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.body}</div>
+                    </td>
+                    <td><Chip type="in">{t.status === "open" ? "Open" : t.status}</Chip></td>
+                    <td className="mono tiny">{t.attachmentCount || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------- app root */
 export default function AAADoorsStock() {
   const [db, setDb] = useState(null);
   const [movements, setMovements] = useState([]);
+  const [tickets, setTickets] = useState([]);
   const [user, setUser] = useState(null);
   const [view, setView] = useState("dash");
   const [entryType, setEntryType] = useState("IN");
@@ -1798,6 +1993,7 @@ export default function AAADoorsStock() {
     (async () => {
       let d = await store.get(K_DB);
       let m = await store.get(K_MOV);
+      let t = await store.get(K_TICKETS);
       if (!d) {
         d = seedDB();
         m = seedMovements(d);
@@ -1807,6 +2003,7 @@ export default function AAADoorsStock() {
       if (!alive) return;
       setDb(d);
       setMovements(Array.isArray(m) ? m : []);
+      setTickets(Array.isArray(t) ? t : []);
       setBooting(false);
     })();
     return () => { alive = false; };
@@ -1889,6 +2086,38 @@ export default function AAADoorsStock() {
     await persistMov(movements.filter((x) => x.id !== m.id));
     setOpenDoc(null);
     toast("Entry " + m.serial + " deleted. Stock has been recalculated.");
+  };
+
+  /* ---- tickets ---- */
+  const saveTicket = async (payload) => {
+    const id = uid("tk");
+    const rec = {
+      id,
+      subject: payload.subject,
+      body: payload.body,
+      kind: payload.kind || "issue",
+      status: "open",
+      attachmentCount: (payload.attachments || []).length,
+      userId: user.id,
+      userName: user.name,
+      createdAt: new Date().toISOString(),
+    };
+    if (payload.attachments && payload.attachments.length) {
+      const okMedia = await store.set(K_TICKET_MEDIA(id), payload.attachments);
+      if (!okMedia) {
+        toast("Could not save the attachments. Try fewer or smaller files.", true);
+        return false;
+      }
+    }
+    const next = [rec, ...tickets];
+    setTickets(next);
+    const ok = await store.set(K_TICKETS, next);
+    if (!ok) {
+      toast("Could not save the ticket. Try again.", true);
+      return false;
+    }
+    toast("Ticket raised. Your issues or tickets will be resolved shortly.");
+    return true;
   };
 
   /* ---- items ---- */
@@ -2017,6 +2246,7 @@ export default function AAADoorsStock() {
     { k: "new", label: "New entry", icon: I.plus, show: can(user, "stockIn") || can(user, "stockOut") || can(user, "transfer") },
     { k: "stock", label: "Live stock", icon: I.layers, show: true },
     { k: "log", label: "Movement log", icon: I.list, show: can(user, "reports") },
+    { k: "ticket", label: "Rise a ticket", icon: I.ticket, show: true },
     { k: "items", label: "Items", icon: I.tag, show: true },
     { k: "facilities", label: "Facilities", icon: I.bldg, show: can(user, "facilities") },
     { k: "users", label: "Users & access", icon: I.users, show: can(user, "users") },
@@ -2028,6 +2258,7 @@ export default function AAADoorsStock() {
     new: ["New entry", "Book goods in, dispatch them out, or move them between your own sites."],
     stock: ["Live stock", "What is on hand right now, by item and by facility."],
     log: ["Movement log", "Every entry ever booked, with its serial, truck and proof."],
+    ticket: ["Rise a ticket", "Send a query or issue — attach a photo or video if it helps."],
     items: ["Item master", "The catalogue your team picks from when booking stock."],
     facilities: ["Facilities", "Warehouses, yards and showrooms that hold stock."],
     users: ["Users & access", "Who can sign in, and exactly what each person may do."],
@@ -2049,7 +2280,7 @@ export default function AAADoorsStock() {
           <div className="side-top"><Logo h={40} mono /></div>
           <nav className="nav">
             <div className="nav-lbl">Working</div>
-            {NAV.filter((n) => ["dash", "new", "stock", "log"].includes(n.k)).map((n) => (
+            {NAV.filter((n) => ["dash", "new", "stock", "log", "ticket"].includes(n.k)).map((n) => (
               <button key={n.k} className={"nav-i" + (view === n.k ? " on" : "")} onClick={() => goto(n.k)}>
                 <Ic d={n.icon} s={17} /> {n.label}
                 {n.k === "stock" && lowCount > 0 && <span className="badge">{lowCount}</span>}
@@ -2106,6 +2337,9 @@ export default function AAADoorsStock() {
             {view === "stock" && <LiveStock db={db} stock={stock} user={user} go={goto} exportCSV={exportCSV} />}
             {view === "log" && can(user, "reports") && (
               <MovementLog db={db} movements={movements} user={user} openMovement={openMovement} exportCSV={exportCSV} />
+            )}
+            {view === "ticket" && (
+              <RaiseTicket tickets={tickets} user={user} onSubmit={saveTicket} toast={toast} />
             )}
             {view === "items" && (
               <Items db={db} stock={stock} user={user} onSaveItem={saveItem} onDeleteItem={deleteItem} toast={toast} exportCSV={exportCSV} />
